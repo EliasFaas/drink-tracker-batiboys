@@ -26,7 +26,7 @@ export default function App() {
           event: "*",
           schema: "public",
           table: "drinks",
-          filter: `group_code=eq.${groupCode}`,
+        filter: `groupcode=eq.${groupCode}`,
         },
         () => {
           fetchLeaderboard();
