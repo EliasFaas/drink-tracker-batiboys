@@ -13,11 +13,30 @@ export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [leaderboard, setLeaderboard] = useState({});
 
-  // Haal alle data op zodra je bent ingelogd
   useEffect(() => {
-    if (loggedIn) {
-      fetchLeaderboard();
-    }
+    if (!loggedIn) return;
+
+    fetchLeaderboard();
+
+    const channel = supabase
+      .channel("realtime-drinks")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "drinks",
+          filter: `group_code=eq.${groupCode}`,
+        },
+        () => {
+          fetchLeaderboard();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [loggedIn]);
 
   const handleLogin = () => {
@@ -34,7 +53,6 @@ export default function App() {
         points: drink.points,
       },
     ]);
-    fetchLeaderboard(); // vernieuw leaderboard
   };
 
   const fetchLeaderboard = async () => {
@@ -48,7 +66,6 @@ export default function App() {
       return;
     }
 
-    // Groepeer op gebruikersnaam
     const grouped = {};
     data.forEach((entry) => {
       if (!grouped[entry.username]) grouped[entry.username] = 0;
@@ -61,9 +78,7 @@ export default function App() {
   if (!loggedIn) {
     return (
       <div style={{ padding: "2rem", maxWidth: "400px", margin: "auto" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "1rem" }}>
-          Join a Drinking Group
-        </h1>
+        <h1>Join a Drinking Group</h1>
         <input
           placeholder="Username"
           value={username}
@@ -83,8 +98,8 @@ export default function App() {
 
   return (
     <div style={{ padding: "2rem", maxWidth: "600px", margin: "auto" }}>
-      <h1 style={{ fontSize: "2rem", fontWeight: "bold" }}>Welcome, {username}</h1>
-      <p style={{ marginBottom: "1rem" }}>Group: {groupCode}</p>
+      <h1>Welcome, {username}</h1>
+      <p>Group: {groupCode}</p>
 
       {mockDrinks.map((drink) => (
         <button
@@ -97,7 +112,7 @@ export default function App() {
       ))}
 
       <div style={{ marginTop: "2rem" }}>
-        <h2 style={{ fontSize: "1.2rem", fontWeight: "bold" }}>Leaderboard</h2>
+        <h2>Leaderboard</h2>
         <ul>
           {Object.entries(leaderboard)
             .sort((a, b) => b[1] - a[1])
