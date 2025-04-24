@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "./supabaseClient";
 
 const mockDrinks = [
   { name: "Beer", points: 1 },
@@ -8,27 +9,53 @@ const mockDrinks = [
 
 export default function App() {
   const [username, setUsername] = useState("");
-  const [loggedIn, setLoggedIn] = useState(false);
   const [groupCode, setGroupCode] = useState("");
-  const [drinks, setDrinks] = useState([]);
+  const [loggedIn, setLoggedIn] = useState(false);
   const [leaderboard, setLeaderboard] = useState({});
+
+  // Haal alle data op zodra je bent ingelogd
+  useEffect(() => {
+    if (loggedIn) {
+      fetchLeaderboard();
+    }
+  }, [loggedIn]);
 
   const handleLogin = () => {
     if (!username || !groupCode) return;
     setLoggedIn(true);
-    if (!leaderboard[groupCode]) {
-      setLeaderboard({ ...leaderboard, [groupCode]: {} });
-    }
   };
 
-  const addDrink = (drink) => {
-    const updatedLeaderboard = { ...leaderboard };
-    if (!updatedLeaderboard[groupCode][username]) {
-      updatedLeaderboard[groupCode][username] = 0;
+  const addDrink = async (drink) => {
+    await supabase.from("drinks").insert([
+      {
+        username,
+        group_code: groupCode,
+        drink_type: drink.name,
+        points: drink.points,
+      },
+    ]);
+    fetchLeaderboard(); // vernieuw leaderboard
+  };
+
+  const fetchLeaderboard = async () => {
+    const { data, error } = await supabase
+      .from("drinks")
+      .select("*")
+      .eq("group_code", groupCode);
+
+    if (error) {
+      console.error("Error fetching drinks:", error);
+      return;
     }
-    updatedLeaderboard[groupCode][username] += drink.points;
-    setLeaderboard(updatedLeaderboard);
-    setDrinks([...drinks, drink]);
+
+    // Groepeer op gebruikersnaam
+    const grouped = {};
+    data.forEach((entry) => {
+      if (!grouped[entry.username]) grouped[entry.username] = 0;
+      grouped[entry.username] += entry.points;
+    });
+
+    setLeaderboard(grouped);
   };
 
   if (!loggedIn) {
@@ -72,7 +99,7 @@ export default function App() {
       <div style={{ marginTop: "2rem" }}>
         <h2 style={{ fontSize: "1.2rem", fontWeight: "bold" }}>Leaderboard</h2>
         <ul>
-          {Object.entries(leaderboard[groupCode] || {})
+          {Object.entries(leaderboard)
             .sort((a, b) => b[1] - a[1])
             .map(([user, points]) => (
               <li key={user}>
